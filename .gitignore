@@ -1,0 +1,44 @@
+# ---------------------
+# Python
+# ---------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+*.egg-info/
+.env
+.env.*
+*.log
+
+# Virtual environment
+.venv/
+venv/
+ENV/
+
+# Jupyter / notebooks
+.ipynb_checkpoints
+*.ipynb
+
+# ---------------------
+# Node / Frontend
+# ---------------------
+node_modules/
+dist/
+build/
+*.lock
+package-lock.json
+yarn.lock
+
+# ---------------------
+# OS Files
+# ---------------------
+.DS_Store
+Thumbs.db
+
+# ---------------------
+# IDEs
+# ---------------------
+.vscode/
+.idea/

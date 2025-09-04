@@ -1,0 +1,12 @@
+# Core dependencies
+fastapi==0.111.0
+uvicorn==0.30.0
+requests==2.32.3
+python-dotenv==1.0.1
+
+# Database
+SQLAlchemy==2.0.32
+pg8000==1.31.2
+
+# Optional but useful
+pydantic==2.8.2

@@ -1,0 +1,595 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Arbitrage Opportunities</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+    }
+    body { background: linear-gradient(135deg, #0b1220 0%, #0f172a 50%, #111827 100%); }
+    .glass { background: rgba(17, 24, 39, 0.6); backdrop-filter: blur(8px); }
+    .card { transition: transform 0.15s ease-in-out, box-shadow 0.15s ease-in-out; }
+    .card:hover { transform: translateY(-4px); box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+  </style>
+</head>
+<body class="h-screen flex text-slate-100">
+
+  <!-- Topbar -->
+  <header class="fixed top-0 left-0 right-0 z-10 glass border-b border-white/10">
+    <div class="px-4 py-2 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-400"></div>
+        <h1 class="text-xl font-bold tracking-wide">Arbitrage Dashboard</h1>
+      </div>
+      <div class="hidden md:flex items-center space-x-2 text-sm text-slate-300">
+        <span class="px-3 py-1 rounded-full border border-white/10 bg-white/5">Live</span>
+        <span class="px-3 py-1 rounded-full border border-white/10 bg-white/5">Odds Monitor</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Sidebar -->
+  <aside class="w-80 glass shadow-xl p-6 space-y-6 overflow-y-auto pt-14 border-r border-white/10">
+    <h2 class="text-lg font-semibold text-slate-200">Filters</h2>
+
+    <!-- Sportsbooks -->
+    <div>
+      <h3 class="font-semibold mb-2">Sportsbooks</h3>
+      <div id="booksFilter" class="space-y-1"></div>
+    </div>
+
+    <!-- Leagues -->
+    <div>
+      <h3 class="font-semibold mb-2">Leagues</h3>
+      <div id="leaguesFilter" class="space-y-1"></div>
+    </div>
+
+    <!-- Markets -->
+    <div>
+      <h3 class="font-semibold mb-2">Markets</h3>
+      <div id="marketsFilter" class="space-y-1"></div>
+    </div>
+
+    <!-- Total Stake -->
+    <div>
+      <label class="font-semibold">Total Stake</label>
+      <div class="mt-2 flex items-center space-x-2">
+        <span class="text-slate-300">$</span>
+        <input id="stakeInput" type="number" min="1" step="1" value="100" class="w-full rounded bg-white/5 border border-white/10 px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+      </div>
+      <p class="text-xs text-slate-400 mt-1">Used to compute stakes per outcome.</p>
+    </div>
+
+    <!-- Min Margin -->
+    <div>
+      <label class="font-semibold">Min Profit Margin: <span id="marginVal">0%</span></label>
+      <input id="marginSlider" type="range" min="0" max="10" step="0.5" value="0" class="w-full">
+    </div>
+
+    <!-- Hours Ahead -->
+    <div>
+      <label class="font-semibold">Min Hours Ahead: <span id="hoursVal">0</span></label>
+      <input id="hoursSlider" type="range" min="0" max="48" step="1" value="0" class="w-full">
+    </div>
+
+    <!-- Refresh Interval -->
+    <div>
+      <label class="font-semibold">Refresh (sec): <span id="refreshVal">30</span></label>
+      <input id="refreshSlider" type="range" min="10" max="300" step="10" value="30" class="w-full">
+    </div>
+
+    <!-- Show Middles -->
+    <div>
+      <label class="inline-flex items-center">
+        <input id="middlesToggle" type="checkbox" class="mr-2"> Show Middles
+      </label>
+    </div>
+
+    <!-- Sorting -->
+    <div>
+      <label class="font-semibold text-white">Sort By</label>
+      <select id="sortSelect" class="w-full border rounded p-2 bg-white text-black border-slate-300 focus:outline-none focus:ring-2 focus:ring-cyan-400">
+        <option value="profit">Profit</option>
+        <option value="date">Date</option>
+        <option value="league">League</option>
+        <option value="event">Event</option>
+      </select>
+    </div>
+
+    <!-- Export -->
+    <button id="exportBtn" class="w-full bg-gradient-to-r from-indigo-500 to-cyan-500 text-white py-2 rounded hover:opacity-95">
+      Export to CSV
+    </button>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="flex-1 overflow-y-auto p-8 pt-16">
+    <div class="mx-auto max-w-[1400px]">
+      <div class="flex items-end justify-between mb-6">
+        <div>
+          <h1 class="text-3xl font-semibold">Arbitrage Opportunities</h1>
+          <p class="text-slate-300 text-sm mt-1">Stake recommendations are computed from your Total Stake.</p>
+        </div>
+        <div class="hidden md:flex items-center space-x-2 text-xs text-slate-300">
+          <button id="refreshNowBtn" class="px-3 py-2 rounded bg-gradient-to-r from-cyan-500 to-indigo-500 text-white font-medium hover:opacity-95">Refresh Now</button>
+          <span class="px-2 py-1 rounded border border-white/10 bg-white/5">Auto-refresh</span>
+          <span class="px-2 py-1 rounded border border-white/10 bg-white/5">Best-price aggregation</span>
+        </div>
+      </div>
+      <div id="oppsContainer" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"></div>
+
+      <!-- Middles -->
+      <h2 class="text-2xl font-semibold mt-12 mb-4">Middles</h2>
+      <div id="middlesContainer" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"></div>
+    </div>
+  </main>
+
+<script>
+const API = "http://127.0.0.1:8000";
+
+let refreshTimer = null;
+
+async function fetchFilters() {
+  const leagues = await (await fetch(`${API}/leagues`)).json();
+  const markets = await (await fetch(`${API}/markets`)).json();
+  const books = await (await fetch(`${API}/books`)).json();
+
+  populateCheckboxes("leaguesFilter", leagues.leagues, "league");
+  populateCheckboxes("marketsFilter", markets.markets, "market");
+  populateCheckboxes("booksFilter", books.sportsbooks, "book");
+}
+
+function populateCheckboxes(containerId, items, type) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = "";
+  items.forEach(item => {
+    const id = `${type}-${item}`;
+    const label = document.createElement("label");
+    label.className = "flex items-center space-x-2";
+    label.innerHTML = `<input type="checkbox" value="${item}" id="${id}" class="filter-${type}"> <span>${item}</span>`;
+    container.appendChild(label);
+  });
+}
+
+function getSelectedValues(selector) {
+  return [...document.querySelectorAll(selector + ":checked")].map(cb => cb.value);
+}
+
+async function fetchOpportunities() {
+  const leagues = getSelectedValues(".filter-league").join(",");
+  const markets = getSelectedValues(".filter-market").join(",");
+  const books = getSelectedValues(".filter-book").join(",");
+  const minMargin = document.getElementById("marginSlider").value;
+  const minHours = document.getElementById("hoursSlider").value;
+  const middles = document.getElementById("middlesToggle").checked;
+  const sortBy = document.getElementById("sortSelect").value;
+
+  const url = new URL(`${API}/arbitrage`);
+  if (leagues) url.searchParams.set("leagues", leagues);
+  if (markets) url.searchParams.set("markets", markets);
+  if (books) url.searchParams.set("sportsbooks", books);
+  url.searchParams.set("min_margin", minMargin);
+  url.searchParams.set("min_hours_ahead", minHours);
+  url.searchParams.set("show_middles", middles);
+  if (middles) {
+    // Use more permissive defaults to surface candidates
+    url.searchParams.set("middle_min_width", "0.25");
+    url.searchParams.set("middle_min_price", "1.8");
+  }
+  url.searchParams.set("sort_by", sortBy);
+
+  const res = await fetch(url);
+  const data = await res.json();
+
+  renderOpportunities(data.opportunities);
+  if (middles) renderMiddles(data.middles);
+}
+
+function renderOpportunities(opps) {
+  const container = document.getElementById("oppsContainer");
+  container.innerHTML = "";
+
+  opps.forEach(opp => {
+    const card = document.createElement("div");
+    card.className = "card bg-white shadow-md rounded-xl p-4 border border-gray-200";
+    card.innerHTML = `
+      <div class="flex justify-between items-center mb-2">
+        <h3 class="text-lg font-bold">${opp.event}</h3>
+        <span class="px-2 py-1 rounded bg-green-100 text-green-800 font-semibold">
+          ${opp.profit_margin.toFixed(2)}%
+        </span>
+      </div>
+      <p class="text-sm text-gray-600">${opp.league.toUpperCase()} â€¢ ${opp.market.toUpperCase()} â€¢ Line: ${opp.line || "â€”"}</p>
+      <p class="text-sm text-gray-500 mb-2">Date: ${opp.event_date || "?"} â€¢ ${opp.commence_time || "?"}</p>
+      <div class="space-y-1">
+        ${opp.best_odds.map(o => `
+          <div class="flex justify-between">
+            <span>${o.sportsbook} (${o.outcome})</span>
+            <span>${o.odds_american || "?"} (${o.odds_decimal})</span>
+          </div>
+        `).join("")}
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function renderMiddles(middles) {
+  const container = document.getElementById("middlesContainer");
+  container.innerHTML = "";
+
+  middles.forEach(mid => {
+    const card = document.createElement("div");
+    card.className = "card glass rounded-xl p-4 border border-white/10";
+    card.innerHTML = `
+      <h3 class="text-lg font-bold mb-2">${mid.event}</h3>
+      <p class="text-sm text-gray-600">Totals Middle â€¢ Width: ${mid.middle_width}</p>
+      <p class="text-sm text-gray-500 mb-2">Date: ${mid.event_date || "?"} â€¢ ${mid.commence_time || "?"}</p>
+      <div class="space-y-1">
+        <div class="flex justify-between">
+          <span>Over ${mid.over.line} (${mid.over.sportsbook})</span>
+          <span>${mid.over.odds_american || "?"} (${mid.over.odds_decimal})</span>
+        </div>
+        <div class="flex justify-between">
+          <span>Under ${mid.under.line} (${mid.under.sportsbook})</span>
+          <span>${mid.under.odds_american || "?"} (${mid.under.odds_decimal})</span>
+        </div>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+// Export CSV
+document.getElementById("exportBtn").addEventListener("click", () => {
+  const rows = [["Event","League","Market","Line","Profit Margin","Sportsbook","Outcome","Odds (Decimal)","Odds (American)"]];
+  document.querySelectorAll("#oppsContainer .card").forEach(card => {
+    const event = card.querySelector("h3").textContent;
+    const leagueMarket = card.querySelector("p").textContent;
+    const margin = card.querySelector("span").textContent;
+    rows.push([event, leagueMarket, "", "", margin]);
+  });
+  const csv = rows.map(r => r.join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "arbitrage.csv"; a.click();
+});
+
+function setupControls() {
+  const sliders = [
+    ["marginSlider", "marginVal", v => v+"%"],
+    ["hoursSlider", "hoursVal", v => v],
+    ["refreshSlider", "refreshVal", v => v]
+  ];
+  sliders.forEach(([sid, lid, format]) => {
+    document.getElementById(sid).addEventListener("input", e => {
+      document.getElementById(lid).textContent = format(e.target.value);
+    });
+  });
+}
+
+function setupRefresh() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  const interval = document.getElementById("refreshSlider").value * 1000;
+  refreshTimer = setInterval(fetchOpportunities, interval);
+}
+
+document.getElementById("refreshSlider").addEventListener("input", setupRefresh);
+document.getElementById("refreshNowBtn")?.addEventListener("click", () => {
+  fetchOpportunities();
+});
+
+// Init
+fetchFilters().then(() => {
+  setupControls();
+  fetchOpportunities();
+  setupRefresh();
+});
+
+// --- Enhanced rendering with stake recommendations ---
+function fmtMoney(n) {
+  if (!isFinite(n)) return "-";
+  return `$${Number(n).toFixed(2)}`;
+}
+
+function computeStakes(bestOdds, totalStake) {
+  const decs = bestOdds.map(o => parseFloat(o.odds_decimal) || 0);
+  const invSum = decs.reduce((a, d) => a + (d > 0 ? 1/d : 0), 0);
+  if (invSum <= 0) return {stakes: [], payout: 0, profit: 0, roi: 0};
+  const payout = totalStake / invSum; // equal payout irrespective of result
+  const stakes = decs.map(d => payout / d);
+  const profit = payout - totalStake;
+  const roi = totalStake > 0 ? (profit / totalStake * 100) : 0;
+  return {stakes, payout, profit, roi};
+}
+
+// Override renderer to include stake breakdown + summary
+function renderOpportunities(opps) {
+  const container = document.getElementById("oppsContainer");
+  container.innerHTML = "";
+
+  const totalStake = parseFloat(document.getElementById("stakeInput")?.value) || 0;
+
+  opps.forEach(opp => {
+    const {stakes, payout, profit, roi} = computeStakes(opp.best_odds, totalStake);
+
+    const card = document.createElement("div");
+    card.className = "card glass rounded-xl p-4 border border-white/10";
+    card.innerHTML = `
+      <div class="flex justify-between items-start mb-3">
+        <div>
+          <h3 class="text-lg font-semibold">${opp.event}</h3>
+          <p class="text-xs text-slate-300 mt-1">${opp.league.toUpperCase()} â€¢ ${opp.market.toUpperCase()} â€¢ Line: ${opp.line || "â€”"}</p>
+          <p class="text-xs text-slate-400">Date: ${opp.event_date || "?"} â€¢ ${opp.commence_time || "?"}</p>
+        </div>
+        <div class="text-right">
+          <div class="px-2 py-1 rounded bg-emerald-400/15 text-emerald-300 font-semibold inline-block">${opp.profit_margin.toFixed(2)}%</div>
+          <div class="text-[10px] text-slate-400">Edge</div>
+        </div>
+      </div>
+
+      <div class="space-y-2 mb-3">
+        ${opp.best_odds.map((o, idx) => `
+          <div class="flex items-center justify-between text-sm bg-white/5 rounded p-2 border border-white/10">
+            <div class="flex flex-col">
+              <span class="font-medium">${o.sportsbook}</span>
+              <span class="text-slate-300">${o.outcome}</span>
+            </div>
+            <div class="text-right">
+              <div class="text-slate-200">${o.odds_american || "?"} <span class=\"text-slate-400\">(${o.odds_decimal})</span></div>
+              <div class="text-cyan-300 font-semibold">Stake: ${fmtMoney(stakes[idx] || 0)}</div>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+
+      <div class="grid grid-cols-3 gap-2 text-center text-sm">
+        <div class="bg-white/5 rounded p-2 border border-white/10">
+          <div class="text-slate-300">Total Stake</div>
+          <div class="font-semibold">${fmtMoney(totalStake)}</div>
+        </div>
+        <div class="bg-white/5 rounded p-2 border border-white/10">
+          <div class="text-slate-300">Payout</div>
+          <div class="font-semibold">${fmtMoney(payout)}</div>
+        </div>
+        <div class="bg-white/5 rounded p-2 border border-white/10">
+          <div class="text-slate-300">Guaranteed Profit</div>
+          <div class="font-semibold ${profit>0? 'text-emerald-300':'text-slate-200'}">${fmtMoney(profit)} <span class="text-[10px] text-slate-400">(${isFinite(roi)? roi.toFixed(2):'0.00'}%)</span></div>
+        </div>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+// Recompute on stake change
+document.getElementById("stakeInput")?.addEventListener("input", () => {
+  fetchOpportunities();
+});
+
+// --- Formatting helpers (override) ---
+function fmtLeagueMarket(league, market, line) {
+  const L = (league || '').toUpperCase();
+  const M = (market || '').toUpperCase();
+  const ln = (line ?? '—');
+  return `${L} &bull; ${M} &bull; ${ln}`;
+}
+
+function fmtNiceDate(iso) {
+  if (!iso) return '?';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '?';
+  const datePart = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const timePart = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true });
+  return `${datePart} ${timePart}`;
+}
+
+// --- Override renderers with nicer formatting ---
+function renderOpportunities(opps) {
+  const container = document.getElementById('oppsContainer');
+  container.innerHTML = '';
+
+  const totalStake = parseFloat(document.getElementById('stakeInput')?.value) || 0;
+  opps.forEach(opp => {
+    const {stakes, payout, profit, roi} = computeStakes(opp.best_odds, totalStake);
+
+    const card = document.createElement('div');
+    card.className = 'card glass rounded-xl p-4 border border-white/10';
+    card.innerHTML = `
+      <div class="flex justify-between items-start mb-3">
+        <div>
+          <h3 class="text-lg font-semibold">${opp.event}</h3>
+          <p class="text-xs text-slate-300 mt-1">${fmtLeagueMarket(opp.league, opp.market, opp.line)}</p>
+          <p class="text-xs text-slate-400">${fmtNiceDate(opp.commence_time)}</p>
+        </div>
+        <div class="text-right">
+          <div class="px-2 py-1 rounded bg-emerald-400/15 text-emerald-300 font-semibold inline-block">${opp.profit_margin.toFixed(2)}%</div>
+          <div class="text-[10px] text-slate-400">Edge</div>
+        </div>
+      </div>
+      <div class="space-y-2 mb-3">
+        ${opp.best_odds.map((o, idx) => `
+          <div class=\"flex items-center justify-between text-sm bg-white/5 rounded p-2 border border-white/10\">
+            <div class=\"flex flex-col\">
+              <span class=\"font-medium\">${o.sportsbook}</span>
+              <span class=\"text-slate-300\">${o.outcome}</span>
+            </div>
+            <div class=\"text-right\">
+              <div class=\"text-slate-200\">${o.odds_american || '?'} <span class=\"text-slate-400\">(${o.odds_decimal})</span></div>
+              <div class=\"text-cyan-300 font-semibold\">Stake: ${fmtMoney(stakes[idx] || 0)}</div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div class="grid grid-cols-3 gap-2 text-center text-sm">
+        <div class="bg-white/5 rounded p-2 border border-white/10">
+          <div class="text-slate-300">Total Stake</div>
+          <div class="font-semibold">${fmtMoney(totalStake)}</div>
+        </div>
+        <div class="bg-white/5 rounded p-2 border border-white/10">
+          <div class="text-slate-300">Payout</div>
+          <div class="font-semibold">${fmtMoney(payout)}</div>
+        </div>
+        <div class="bg-white/5 rounded p-2 border border-white/10">
+          <div class="text-slate-300">Guaranteed Profit</div>
+          <div class="font-semibold ${profit>0? 'text-emerald-300':'text-slate-200'}">${fmtMoney(profit)} <span class=\"text-[10px] text-slate-400\">(${isFinite(roi)? roi.toFixed(2):'0.00'}%)</span></div>
+        </div>
+      </div>`;
+
+    // Stake suggestions for middles (equal-loss outside)
+    try {
+      const total = parseFloat(document.getElementById('stakeInput')?.value) || 0;
+      const dO = parseFloat(mid.over?.odds_decimal) || 0;
+      const dU = parseFloat(mid.under?.odds_decimal) || 0;
+      if (total > 0 && dO > 0 && dU > 0) {
+        const sO = total * dU / (dO + dU);
+        const sU = total * dO / (dO + dU);
+        const singleLoss = total/(dO+dU) * (dO + dU - dO*dU);
+        const middleProfit = total/(dO+dU) * (2*dO*dU - (dO + dU));
+
+        const summary = document.createElement('div');
+        summary.className = 'mt-3';
+        summary.innerHTML = `
+          <div class="space-y-2 mb-2">
+            <div class="flex items-center justify-between text-sm bg-white/5 rounded p-2 border border-white/10">
+              <div class="text-slate-300">Suggested Stake (Over)</div>
+              <div class="text-cyan-300 font-semibold">${fmtMoney(sO)}</div>
+            </div>
+            <div class="flex items-center justify-between text-sm bg-white/5 rounded p-2 border border-white/10">
+              <div class="text-slate-300">Suggested Stake (Under)</div>
+              <div class="text-cyan-300 font-semibold">${fmtMoney(sU)}</div>
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-2 text-center text-sm">
+            <div class="bg-white/5 rounded p-2 border border-white/10">
+              <div class="text-slate-300">Total Stake</div>
+              <div class="font-semibold">${fmtMoney(total)}</div>
+            </div>
+            <div class="bg-white/5 rounded p-2 border border-white/10">
+              <div class="text-slate-300">Single-win Loss</div>
+              <div class="font-semibold ${singleLoss>0?'text-rose-300':'text-slate-200'}">-${fmtMoney(singleLoss)}</div>
+            </div>
+            <div class="bg-white/5 rounded p-2 border border-white/10">
+              <div class="text-slate-300">Middle Profit</div>
+              <div class="font-semibold ${middleProfit>0?'text-emerald-300':'text-slate-200'}">${fmtMoney(middleProfit)}</div>
+            </div>
+          </div>`;
+        card.appendChild(summary);
+      }
+    } catch (e) {}
+    container.appendChild(card);
+  });
+}
+
+function renderMiddles(middles) {
+  const container = document.getElementById('middlesContainer');
+  container.innerHTML = '';
+
+  middles.forEach(mid => {
+    const card = document.createElement('div');
+    card.className = 'card glass rounded-xl p-4 border border-amber-400/20';
+    card.innerHTML = `
+      <div class=\"flex justify-between items-start mb-3\">
+        <div>
+          <h3 class=\"text-lg font-semibold\">${mid.event}</h3>
+          <p class=\"text-xs text-slate-300 mt-1\">Totals Middle &bull; Width: ${mid.middle_width}</p>
+          <p class=\"text-xs text-slate-400\">${fmtNiceDate(mid.commence_time)}</p>
+        </div>
+        <span class=\"px-2 py-1 rounded bg-amber-400/20 text-amber-300 text-xs font-semibold\">Middle</span>
+      </div>
+      <div class=\"space-y-2\">
+        <div class=\"flex items-center justify-between text-sm bg-white/5 rounded p-2 border border-white/10\">
+          <div>Over <span class=\"font-medium\">${mid.over.line}</span> <span class=\"text-slate-400\">(${mid.over.sportsbook})</span></div>
+          <div class=\"text-slate-200\">${mid.over.odds_american || '?'} <span class=\"text-slate-400\">(${mid.over.odds_decimal})</span></div>
+        </div>
+        <div class=\"flex items-center justify-between text-sm bg-white/5 rounded p-2 border border-white/10\">
+          <div>Under <span class=\"font-medium\">${mid.under.line}</span> <span class=\"text-slate-400\">(${mid.under.sportsbook})</span></div>
+          <div class=\"text-slate-200\">${mid.under.odds_american || '?'} <span class=\"text-slate-400\">(${mid.under.odds_decimal})</span></div>
+        </div>
+      </div>`;
+    container.appendChild(card);
+  });
+}
+
+// --- Final override: Middles with stake suggestions ---
+function renderMiddles(middles) {
+  const container = document.getElementById('middlesContainer');
+  container.innerHTML = '';
+
+  middles.forEach(mid => {
+    const card = document.createElement('div');
+    card.className = 'card glass rounded-xl p-4 border border-amber-400/20';
+    card.innerHTML = `
+      <div class="flex justify-between items-start mb-3">
+        <div>
+          <h3 class="text-lg font-semibold">${mid.event}</h3>
+          <p class="text-xs text-slate-300 mt-1">Totals Middle &bull; Width: ${mid.middle_width}</p>
+          <p class="text-xs text-slate-400">${fmtNiceDate(mid.commence_time)}</p>
+        </div>
+        <span class="px-2 py-1 rounded bg-amber-400/20 text-amber-300 text-xs font-semibold">Middle</span>
+      </div>
+      <div class="space-y-2 mb-3">
+        <div class="flex items-center justify-between text-sm bg-white/5 rounded p-2 border border-white/10">
+          <div>Over <span class="font-medium">${mid.over.line}</span> <span class="text-slate-400">(${mid.over.sportsbook})</span></div>
+          <div class="text-right">
+            <div class="text-slate-200">${mid.over.odds_american || '?'} <span class="text-slate-400">(${mid.over.odds_decimal})</span></div>
+          </div>
+        </div>
+        <div class="flex items-center justify-between text-sm bg-white/5 rounded p-2 border border-white/10">
+          <div>Under <span class="font-medium">${mid.under.line}</span> <span class="text-slate-400">(${mid.under.sportsbook})</span></div>
+          <div class="text-right">
+            <div class="text-slate-200">${mid.under.odds_american || '?'} <span class="text-slate-400">(${mid.under.odds_decimal})</span></div>
+          </div>
+        </div>
+      </div>`;
+
+    const total = parseFloat(document.getElementById('stakeInput')?.value) || 0;
+    const dO = parseFloat(mid.over?.odds_decimal) || 0;
+    const dU = parseFloat(mid.under?.odds_decimal) || 0;
+    if (total > 0 && dO > 0 && dU > 0) {
+      const sO = total * dU / (dO + dU);
+      const sU = total * dO / (dO + dU);
+      const singleLoss = total/(dO+dU) * (dO + dU - dO*dU);
+      const middleProfit = total/(dO+dU) * (2*dO*dU - (dO + dU));
+
+      const summary = document.createElement('div');
+      summary.className = 'mt-3';
+      summary.innerHTML = `
+        <div class="space-y-2 mb-2">
+          <div class="flex items-center justify-between text-sm bg-white/5 rounded p-2 border border-white/10">
+            <div class="text-slate-300">Suggested Stake (Over)</div>
+            <div class="text-cyan-300 font-semibold">${fmtMoney(sO)}</div>
+          </div>
+          <div class="flex items-center justify-between text-sm bg-white/5 rounded p-2 border border-white/10">
+            <div class="text-slate-300">Suggested Stake (Under)</div>
+            <div class="text-cyan-300 font-semibold">${fmtMoney(sU)}</div>
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-2 text-center text-sm">
+          <div class="bg-white/5 rounded p-2 border border-white/10">
+            <div class="text-slate-300">Total Stake</div>
+            <div class="font-semibold">${fmtMoney(total)}</div>
+          </div>
+          <div class="bg-white/5 rounded p-2 border border-white/10">
+            <div class="text-slate-300">Single-win Loss</div>
+            <div class="font-semibold ${singleLoss>0?'text-rose-300':'text-slate-200'}">-${fmtMoney(singleLoss)}</div>
+          </div>
+          <div class="bg-white/5 rounded p-2 border border-white/10">
+            <div class="text-slate-300">Middle Profit</div>
+            <div class="font-semibold ${middleProfit>0?'text-emerald-300':'text-slate-200'}">${fmtMoney(middleProfit)}</div>
+          </div>
+        </div>`;
+      card.appendChild(summary);
+    }
+
+    container.appendChild(card);
+  });
+}
+
+</script>
+</body>
+</html>
+
